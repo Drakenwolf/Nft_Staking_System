@@ -2,33 +2,21 @@
 pragma solidity ^0.8.2;
 
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
+import "hardhat/console.sol";
 
-interface IRewardToken {
-    function mint(address to, uint256 amount) external;
-}
-
-interface INft {
-    function ownerOf(uint256 tokenId) external view returns (address owner);
-
-    function safeTransferFrom(
-        address from,
-        address to,
-        uint256 tokenId
-    ) external;
-}
-
-contract StakingNft is Ownable {
-    IRewardToken public rewardToken;
-    INft public nft;
+contract StakingSystem is Ownable, ERC721Holder {
+    IERC20 public rewardsToken;
+    IERC721 public nft;
 
     uint256 public stakedTotal;
-    uint256 public stakingStart;
-    uint256 constant stakingTime = 1 days;
-    uint256 public totalUnclaimedRewards;
+    uint256 public stakingStartTime;
+    uint256 constant stakingTime = 180 seconds;
+    // uint256 public totalUnclaimedRewards;
     uint256 constant token = 10e18;
-
     struct Staker {
         uint256[] tokenIds;
         mapping(uint256 => int256) tokenStakingCoolDown;
@@ -38,15 +26,15 @@ contract StakingNft is Ownable {
         uint256 rewardsReleased;
     }
 
-    constructor(INft _nft, IRewardToken _rewardToken) {
+    constructor(IERC721 _nft, IERC20 _rewardsToken) {
         nft = _nft;
-        rewardToken = _rewardToken;
+        rewardsToken = _rewardsToken;
     }
 
     /// @notice mapping of a staker to its current properties
     mapping(address => Staker) public stakers;
 
-    /// @notice mapping from token ID to owner address
+    // Mapping from token ID to owner address
     mapping(uint256 => address) public tokenOwner;
     bool public tokensClaimable;
     bool initialised;
@@ -66,12 +54,14 @@ contract StakingNft is Ownable {
     event EmergencyUnstake(address indexed user, uint256 tokenId);
 
     function initStaking() public onlyOwner {
+        //needs access control
         require(!initialised, "Already initialised");
-        stakingStart = block.timestamp;
+        stakingStartTime = block.timestamp;
         initialised = true;
     }
 
     function setTokensClaimable(bool _enabled) public onlyOwner {
+        //needs access control
         tokensClaimable = _enabled;
         emit ClaimableStatusUpdated(_enabled);
     }
@@ -95,9 +85,10 @@ contract StakingNft is Ownable {
     }
 
     function _stake(address _user, uint256 _tokenId) internal {
+        require(initialised, "Staking System: the staking has not started");
         require(
             nft.ownerOf(_tokenId) == _user,
-            "Nft Staking System:user must be the owner of the token"
+            "user must be the owner of the token"
         );
         Staker storage staker = stakers[_user];
 
@@ -108,10 +99,10 @@ contract StakingNft is Ownable {
         nft.safeTransferFrom(_user, address(this), _tokenId);
 
         emit Staked(_user, _tokenId);
+        stakedTotal++;
     }
 
     function unstake(uint256 _tokenId) public {
-       
         claimReward(msg.sender);
         _unstake(msg.sender, _tokenId);
     }
@@ -125,7 +116,7 @@ contract StakingNft is Ownable {
         }
     }
 
-        // Unstake without caring about rewards. EMERGENCY ONLY.
+    // Unstake without caring about rewards. EMERGENCY ONLY.
     function emergencyUnstake(uint256 _tokenId) public {
         require(
             tokenOwner[_tokenId] == msg.sender,
@@ -159,38 +150,31 @@ contract StakingNft is Ownable {
         nft.safeTransferFrom(address(this), _user, _tokenId);
 
         emit Unstaked(_user, _tokenId);
+        stakedTotal--;
     }
 
     function updateReward(address _user) public {
         Staker storage staker = stakers[_user];
         uint256[] storage ids = staker.tokenIds;
-
+        console.log("cooldown before loop");
         for (uint256 i = 0; i < ids.length; i++) {
-            /// @notice that the cooldown is basically the time when a cycle of staking starts. 
-            /// @notice the start of this cycle must be bigger than the staking period
             if (
-                staker.tokenStakingCoolDown[ids[i]] >
+                staker.tokenStakingCoolDown[ids[i]] <
                 int256(block.timestamp + stakingTime) &&
                 staker.tokenStakingCoolDown[ids[i]] >= 0
             ) {
+                console.log("conditional");
+                /// @notice that something here is triggering a payable transaction...
+                console.log("cooldown in loop and conditional:");
 
-                /// @notice that the contract will calculated the staked days and the left time of the cooldown
-                /// @notice rhis is because if an user claims the reward after 1 day and 12hrs of the staking
-                /// @notice we need to be sure that this 12 hrs will be taked in count
+                // uint256 stakedDays = (uint(staker.tokenStakingCoolDown[ids[i]]) - block.timestamp) / stakingTime;
+                // uint256 partialTime = (uint(staker.tokenStakingCoolDown[ids[i]] ) - block.timestamp) % stakingTime;
 
-                uint256 stakedDays = (uint256(
-                    staker.tokenStakingCoolDown[ids[i]]
-                ) - block.timestamp) / stakingTime;
+                // .................................................
 
-                
-                uint256 partialTime = (uint256(
-                    staker.tokenStakingCoolDown[ids[i]]
-                ) - block.timestamp) % stakingTime;
+                // staker.balance =  token * stakedDays;
 
-                staker.balance = token * stakedDays;
-                staker.tokenStakingCoolDown[ids[i]] = int256(
-                    block.timestamp + partialTime
-                );
+                // staker.tokenStakingCoolDown[ids[i]] = int(block.timestamp + partialTime);
             }
         }
     }
@@ -203,7 +187,7 @@ contract StakingNft is Ownable {
 
         staker.rewardsEarned -= staker.balance;
         staker.rewardsReleased += staker.balance;
-        rewardToken.mint(_user, staker.balance);
+        rewardsToken.transfer(_user, staker.balance);
 
         emit RewardPaid(_user, staker.balance);
     }
