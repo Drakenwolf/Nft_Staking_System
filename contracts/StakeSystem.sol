@@ -169,7 +169,7 @@ contract StakingSystem is Ownable, ERC721Holder {
                 uint256 stakedDays = ((block.timestamp - uint(staker.tokenStakingCoolDown[ids[i]]))) / stakingTime;
                 uint256 partialTime = ((block.timestamp - uint(staker.tokenStakingCoolDown[ids[i]]))) % stakingTime;
                 
-                staker.balance =  token * stakedDays;
+                staker.balance +=  token * stakedDays;
 
                 staker.tokenStakingCoolDown[ids[i]] = block.timestamp + partialTime;
 
@@ -185,6 +185,7 @@ contract StakingSystem is Ownable, ERC721Holder {
 
 
         stakers[_user].rewardsReleased += stakers[_user].balance;
+        stakers[_user].balance = 0;
         rewardsToken.mint(_user, stakers[_user].balance);
 
         emit RewardPaid(_user, stakers[_user].balance);
