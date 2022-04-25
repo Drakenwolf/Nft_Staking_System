@@ -140,13 +140,11 @@ contract StakingSystem is Ownable, ERC721Holder {
 
         uint256 lastIndex = staker.tokenIds.length - 1;
         uint256 lastIndexKey = staker.tokenIds[lastIndex];
+        
         if (staker.tokenIds.length > 0) {
             staker.tokenIds.pop();
         }
         staker.tokenStakingCoolDown[_tokenId] = 0;
-        if (staker.balance == 0) {
-            delete stakers[_user];
-        }
         delete tokenOwner[_tokenId];
 
         nft.safeTransferFrom(address(this), _user, _tokenId);
