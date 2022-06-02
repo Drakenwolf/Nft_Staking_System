@@ -13,7 +13,7 @@ contract RewardToken is ERC20, ERC20Burnable, AccessControl {
         _grantRole(MINTER_ROLE, msg.sender);
     }
 
-    function mint(address to, uint256 amount) public {
+    function mint(address to, uint256 amount) public{
         _mint(to, amount);
     }
 }
