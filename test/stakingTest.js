@@ -10,7 +10,7 @@ describe("Staking of one nft", function () {
     const account1 = addr1.address;
 
     /// factories
-    const RandomApeFactory = await ethers.getContractFactory("RandomApe");
+    const RandomApeFactory = await ethers.getContractFactory("RandomAPE");
     const RewardTokenFactory = await ethers.getContractFactory("RewardToken");
     const StakingSystemFactory = await ethers.getContractFactory(
       "StakingSystem"
@@ -43,11 +43,11 @@ describe("Staking of one nft", function () {
 
     //mint 2 nfts
 
-    await expect(RandomApeContract.safeMint(account1, "ipfs::/test/"))
+    await expect(RandomApeContract.safeMint(account1))
       .to.emit(RandomApeContract, "Transfer")
       .withArgs(nullAddress, account1, 0);
 
-    await expect(RandomApeContract.safeMint(account1, "ipfs::/test/"))
+    await expect(RandomApeContract.safeMint(account1))
       .to.emit(RandomApeContract, "Transfer")
       .withArgs(nullAddress, account1, 1);
 

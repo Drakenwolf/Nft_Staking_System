@@ -184,6 +184,7 @@ contract StakingSystem is Ownable, ERC721Holder {
 
         stakers[_user].rewardsReleased += stakers[_user].balance;
         stakers[_user].balance = 0;
+   
         rewardsToken.mint(_user, stakers[_user].balance);
 
         emit RewardPaid(_user, stakers[_user].balance);
