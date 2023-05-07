@@ -20,7 +20,7 @@ contract StakingSystem is Ownable, ERC721Holder {
     uint256 public stakingStartTime;
     uint256 constant stakingTime = 180 seconds;
     uint256 constant token = 10e18;
-    
+
     struct Staker {
         uint256[] tokenIds;
         mapping(uint256 => uint256) tokenStakingCoolDown;
@@ -71,15 +71,18 @@ contract StakingSystem is Ownable, ERC721Holder {
         emit ClaimableStatusUpdated(_enabled);
     }
 
-    function getStakedTokens(address _user)
-        public
-        view
-        returns (uint256[] memory tokenIds)
-    {
+    function getStakedTokens(
+        address _user
+    ) public view returns (uint256[] memory tokenIds) {
         return stakers[_user].tokenIds;
     }
 
     function stake(uint256 tokenId) public {
+        require(
+            block.timestamp >= stakingStartTime,
+            "Staking has not started yet"
+        );
+
         _stake(msg.sender, tokenId);
     }
 
@@ -140,7 +143,7 @@ contract StakingSystem is Ownable, ERC721Holder {
 
         uint256 lastIndex = staker.tokenIds.length - 1;
         uint256 lastIndexKey = staker.tokenIds[lastIndex];
-        
+
         if (staker.tokenIds.length > 0) {
             staker.tokenIds.pop();
         }
@@ -153,8 +156,15 @@ contract StakingSystem is Ownable, ERC721Holder {
         stakedTotal--;
     }
 
+    function unstakeAll() public {
+        claimReward(msg.sender);
+        uint256[] memory tokenIds = stakers[msg.sender].tokenIds;
+        for (uint256 i = 0; i < tokenIds.length; i++) {
+            _unstake(msg.sender, tokenIds[i]);
+        }
+    }
+
     function updateReward(address _user) public {
-        
         Staker storage staker = stakers[_user];
         uint256[] storage ids = staker.tokenIds;
         for (uint256 i = 0; i < ids.length; i++) {
@@ -163,13 +173,20 @@ contract StakingSystem is Ownable, ERC721Holder {
                 block.timestamp + stakingTime &&
                 staker.tokenStakingCoolDown[ids[i]] > 0
             ) {
-            
-                uint256 stakedDays = ((block.timestamp - uint(staker.tokenStakingCoolDown[ids[i]]))) / stakingTime;
-                uint256 partialTime = ((block.timestamp - uint(staker.tokenStakingCoolDown[ids[i]]))) % stakingTime;
-                
-                staker.balance +=  token * stakedDays;
+                uint256 stakedDays = (
+                    (block.timestamp -
+                        uint(staker.tokenStakingCoolDown[ids[i]]))
+                ) / stakingTime;
+                uint256 partialTime = (
+                    (block.timestamp -
+                        uint(staker.tokenStakingCoolDown[ids[i]]))
+                ) % stakingTime;
 
-                staker.tokenStakingCoolDown[ids[i]] = block.timestamp + partialTime;
+                staker.balance += token * stakedDays;
+
+                staker.tokenStakingCoolDown[ids[i]] =
+                    block.timestamp +
+                    partialTime;
 
                 console.logUint(staker.tokenStakingCoolDown[ids[i]]);
                 console.logUint(staker.balance);
@@ -179,14 +196,27 @@ contract StakingSystem is Ownable, ERC721Holder {
 
     function claimReward(address _user) public {
         require(tokensClaimable == true, "Tokens cannnot be claimed yet");
-        require(stakers[_user].balance > 0 , "0 rewards yet");
+        updateReward(_user);
+        require(stakers[_user].balance > 0, "0 rewards yet");
 
-
-        stakers[_user].rewardsReleased += stakers[_user].balance;
+        uint256 rewardAmount = stakers[_user].balance;
+        stakers[_user].rewardsReleased += rewardAmount;
         stakers[_user].balance = 0;
-   
-        rewardsToken.mint(_user, stakers[_user].balance);
 
-        emit RewardPaid(_user, stakers[_user].balance);
+        rewardsToken.mint(_user, rewardAmount);
+
+        emit RewardPaid(_user, rewardAmount);
+    }
+
+    function claimAllRewards() public {
+        require(tokensClaimable == true, "Tokens cannnot be claimed yet");
+        updateReward(msg.sender);
+
+        uint256 rewardAmount = stakers[msg.sender].balance;
+        stakers[msg.sender].rewardsReleased += rewardAmount;
+        stakers[msg.sender].balance = 0;
+
+        rewardsToken.mint(msg.sender, rewardAmount);
+        emit RewardPaid(msg.sender, rewardAmount);
     }
 }
